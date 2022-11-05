@@ -7,9 +7,13 @@ namespace App\Services;
 use App\Client;
 use App\Workout;
 use App\WorkoutPlan;
+use App\WorkoutTypes\RandomVisibleWorkout;
+use App\WorkoutTypes\RandomWorkout;
+use App\WorkoutTypes\WorkoutByScore;
+use App\WorkoutTypes\WorkoutByVersion;
 use Illuminate\Support\Collection;
 use Illuminate\Support\Facades\Schema;
-use RuntimeException;
+
 
 /**
  * Class TipManager
@@ -18,106 +22,25 @@ use RuntimeException;
  */
 class WorkoutManager
 {
-    private array $walkerWorkouts;
 
-    private array $beginnerWorkouts;
-
-    private array $intermediateWorkouts;
-
-    private array $advancedWorkouts;
-
-    private array $proWorkouts;
-
-    public function __construct()
+    public function getRandomWorkout(): RandomWorkout
     {
-        if (! Schema::hasTable('workouts')) {
-            return;
-        }
-
-        $this->walkerWorkouts = Workout::whereBetween('level', Client::WALKER_RANGE)->pluck('id')->toArray();
-        $this->beginnerWorkouts = Workout::whereBetween('level', Client::BEGINNER_RANGE)->pluck('id')->toArray();
-        $this->intermediateWorkouts = Workout::whereBetween('level', Client::INTERMEDIATE_RANGE)->pluck('id')->toArray();
-        $this->advancedWorkouts = Workout::whereBetween('level', Client::ADVANCED_RANGE)->pluck('id')->toArray();
-        $this->proWorkouts = Workout::whereBetween('level', Client::PRO_RANGE)->pluck('id')->toArray();
+        return (new RandomWorkout())->getOne();
     }
 
-    public function getRandomWorkout(): Workout
+    public function getRandomVisibleWorkout(): RandomVisibleWorkout
     {
-        $workout = Workout::inRandomOrder()->first();
-        if (! $workout) {
-            throw new RuntimeException('No workout has been found');
-        }
-        return $workout;
-    }
-
-    public function getRandomVisibleWorkout(): Workout
-    {
-        $workout = Workout::where('is_visible', true)->inRandomOrder()->first();
-        if (! $workout) {
-            throw new RuntimeException('No workout has been found');
-        }
-        return $workout;
-    }
-
-    public function getWorkoutIdByScore(int $score): ?int
-    {
-        if (Client::BEGINNER_RANGE[0] <= $score && $score <= Client::BEGINNER_RANGE[1]) {
-            if (empty($this->beginnerWorkouts)) {
-                return null;
-            }
-
-            return $this->beginnerWorkouts[array_rand($this->beginnerWorkouts)];
-        }
-
-        if (Client::INTERMEDIATE_RANGE[0] <= $score && $score <= Client::INTERMEDIATE_RANGE[1]) {
-            if (empty($this->intermediateWorkouts)) {
-                return null;
-            }
-
-            return $this->intermediateWorkouts[array_rand($this->intermediateWorkouts)];
-        }
-
-        if (Client::ADVANCED_RANGE[0] <= $score && $score <= Client::ADVANCED_RANGE[1]) {
-            if (empty($this->advancedWorkouts)) {
-                return null;
-            }
-
-            return $this->advancedWorkouts[array_rand($this->advancedWorkouts)];
-        }
-
-        if (Client::PRO_RANGE[0] <= $score && $score <= Client::PRO_RANGE[1]) {
-            if (empty($this->proWorkouts)) {
-                return null;
-            }
-
-            return $this->proWorkouts[array_rand($this->proWorkouts)];
-        }
-
-        if (empty($this->walkerWorkouts)) {
-            return null;
-        }
-
-        return $this->walkerWorkouts[array_rand($this->walkerWorkouts)];
+        return (new RandomVisibleWorkout())->getOne();
     }
 
     public function getWorkoutByScore(int $score): ?Workout
     {
-        $id = $this->getWorkoutIdByScore($score);
-        if (! $id) {
-            return null;
-        }
-
-        return Workout::find($id);
+       return (new WorkoutByScore($score))->getOne();
     }
 
     public function getOneByVersionScoreAndCount(int $version, int $score, int $workoutCount): ?WorkoutPlan
     {
-        $version = $version === 1 ? null : $version;
-
-        return WorkoutPlan::where('training_plan->version', $version)
-            ->where('running_level', $score)
-            ->where('workout_count', $workoutCount)
-            ->first();
+        return (new WorkoutByVersion($version, $score, $workoutCount))->getOne();
     }
 
     /**
@@ -125,29 +48,16 @@ class WorkoutManager
      */
     public function getAllByVersionScoreAndCount(int $version, int $score, int $workoutCount): Collection
     {
-        $version = $version === 1 ? null : $version;
-
-        return WorkoutPlan::where('training_plan->version', $version)
-            ->where('running_level', $score)
-            ->where('workout_count', $workoutCount)
-            ->get();
+        return (new WorkoutByVersion($version, $score, $workoutCount))->getAll();
     }
 
     public function getByVersionAndScore(int $version, int $score): ?WorkoutPlan
     {
-        $version = $version === 1 ? null : $version;
-
-        return WorkoutPlan::where('training_plan->version', $version)
-            ->where('running_level', $score)
-            ->first();
+        return (new WorkoutByVersion($version, $score))->getByVersionAndScore();
     }
 
     public function getByVersionAndCount(int $version, int $score): ?WorkoutPlan
     {
-        $version = $version === 1 ? null : $version;
-
-        return WorkoutPlan::where('training_plan->version', $version)
-            ->where('workout_count', $score)
-            ->first();
+        return (new WorkoutByVersion($version, $score))->getByVersionAndCount();
     }
 }
